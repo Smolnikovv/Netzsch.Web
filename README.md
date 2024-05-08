@@ -1,27 +1,78 @@
-# NetzschWeb
+# Wymagania
+Do uruchomienia aplikacji wymagany jest angular w wersji 17.3.6. Do poprawnego działania aplikacji wymagana jest uruchomiona instancja aplikacji z poniższego [linku](https://github.com/Smolnikovv/Netzsch.WPF/tree/master). Jeżeli aplikacja się nie uruchamia możliwe, że należy zainstalować obsługę signalR. W tym celu należy użyć komendy 
+```
+npm install @microsoft/signalr
+```
+# Najważniejsze fragmenty kodu
+## signalr.service.ts
+### Połączenie z hubem
+```ts
+constructor(private ngZone: NgZone) { 
+    this.startConnection();
+  }
+ startConnection = () => {
+    this.hubConnection = new signalR.HubConnectionBuilder()
+    .withUrl('http://localhost:5016/signal', {
+      skipNegotiation: true,
+      transport: signalR.HttpTransportType.WebSockets
+    })
+    .build();
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 17.3.6.
+    this.hubConnection
+    .start()
+    .then(() =>{
+      console.log('Connected to Hub');
+    })
+    .catch((err: string) => console.log('Failed with connection' + err))
+    this.outputListiner();
+  }
+```
+Powyższy kod odpowiada za uruchomienie połączenie z hubem aplikacji odpowiadającym za dwustronną komunikację.
+### outputListiner
+```ts
+ receivedText=new BehaviorSubject<string>('Output field');
 
-## Development server
-
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
-
-## Code scaffolding
-
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
-
-## Build
-
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
-
-## Running unit tests
-
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
-
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+ outputListiner = () => {
+    this.hubConnection?.on("SendWpfInput", (data: any) =>{
+      this.ngZone.run(() =>{
+        this.receivedText.next(data);
+      })     
+    })
+  }
+```
+Powyższy kod odpowiada za otrzymanie wartości z aplikacji WPF
+### inputSender
+```ts
+inputSender(value:string){
+    this.hubConnection?.invoke("SendWebInput", value)
+      .catch(err => console.log(err));
+  }
+```
+Powyższy kod odpowiada za wysłanie wartości do aplikacji WPF
+## app.component.ts
+### Połączenie z Hubem
+```ts
+ngOnInit(){
+    this.signalrService.startConnection();
+```
+Powyższy kod odpowiada za połączenie z Hubem. 
+### Otrzymywanie danych z WPFa
+```ts
+ paragraphText = "Output field";
+signalrSubscription = new Subscription;
+this.signalrService.outputListiner();
+    this.signalrSubscription = this.signalrService.receivedText.subscribe((newText) => {
+      this.paragraphText = newText; 
+      console.log(this.paragraphText);
+    });
+```
+Kod subskrybuje metodę outputListiner, otrzymującej dane z WPFa. W przypadku otrzymania danych zmieniana jest wartość zmiennej paragraphText, odpowiadającej za wyświetlenie wartości
+### Wysłanie danych do WPFa
+```ts
+onInputChange(event: Event){
+    const inputElement = event.target as HTMLInputElement;
+    setTimeout(() => {
+      this.signalrService.inputSender(inputElement.value);
+    }, 500);
+```
+Metoda odpowiadająca za wysłanie danych do WPF. Dane zostają wysłane z 0,5 sekundowym opóźnieniem
