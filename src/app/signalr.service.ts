@@ -35,9 +35,7 @@ export class SignalrService {
   outputListiner = () => {
     this.hubConnection?.on("SendWpfInput", (data: any) =>{
       this.ngZone.run(() =>{
-        console.log("data recived: " + data);
         this.receivedText.next(data);
-        console.log("variable: " + this.receivedText);
       })     
     })
   }
